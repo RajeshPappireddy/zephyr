@@ -12,14 +12,13 @@ properties:
       category: required
       description: compatible strings
       constraint: "st,stm32-rcc"
+      generation: define
 
     reg:
       type: array
       description: mmio register space
       generation: define
       category: required
-
-cell_string: clocks
 
 "#cells":
   - bus

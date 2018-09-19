@@ -11,9 +11,6 @@ inherits:
 
 properties:
     compatible:
-      type: string
-      category: required
-      description: compatible strings
       constraint: "st,stm32-usart"
 
     reg:
@@ -26,11 +23,5 @@ properties:
       type: array
       category: required
       description: required interrupts
-      generation: define
-
-    clocks:
-      type: array
-      category: required
-      description: Clock gate control information
       generation: define
 ...

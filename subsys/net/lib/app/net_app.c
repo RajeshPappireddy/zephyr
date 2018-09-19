@@ -17,7 +17,7 @@
 #define  MBEDTLS_PRINT printf
 #else
 #include <misc/printk.h>
-#define  MBEDTLS_PRINT printk
+#define  MBEDTLS_PRINT (int(*)(const char *, ...)) printk
 #endif /* CONFIG_STDOUT_CONSOLE */
 #include <zephyr.h>
 #include <string.h>
@@ -171,20 +171,21 @@ void _net_app_received(struct net_context *net_ctx,
 
 #if defined(CONFIG_NET_APP_SERVER)
 	if (ctx->app_type == NET_APP_SERVER) {
-		if (!pkt) {
-#if defined(CONFIG_NET_TCP)
-			int i;
-#endif
+		bool close = true;
 
-			if (ctx->cb.close) {
-				ctx->cb.close(ctx, status, ctx->user_data);
+		if (pkt) {
+			if (ctx->cb.recv) {
+				ctx->cb.recv(ctx, pkt, status, ctx->user_data);
 			}
 
+			return;
+		}
+
 #if defined(CONFIG_NET_TCP)
-			for (i = 0;
-			     ctx->proto == IPPROTO_TCP &&
-				     i < CONFIG_NET_APP_SERVER_NUM_CONN;
-			     i++) {
+		if (ctx->proto == IPPROTO_TCP) {
+			int i;
+
+			for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
 				if (ctx->server.net_ctxs[i] == net_ctx &&
 				    ctx == net_ctx->net_app) {
 					net_context_put(net_ctx);
@@ -193,13 +194,21 @@ void _net_app_received(struct net_context *net_ctx,
 					break;
 				}
 			}
-#endif
 
-			return;
+			/* Go through the loop and check if there are any
+			 * active net_contexts. If there is any active net
+			 * context do not call the close callback.
+			 */
+			for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
+				if (ctx->server.net_ctxs[i]) {
+					close = false;
+					break;
+				}
+			}
 		}
-
-		if (ctx->cb.recv) {
-			ctx->cb.recv(ctx, pkt, status, ctx->user_data);
+#endif
+		if (close && ctx->cb.close) {
+			ctx->cb.close(ctx, status, ctx->user_data);
 		}
 	}
 #endif
@@ -256,8 +265,8 @@ out:
 	return ret;
 }
 
-int _net_app_set_local_addr(struct sockaddr *addr, const char *myaddr,
-			    u16_t port)
+int _net_app_set_local_addr(struct net_app_ctx *ctx, struct sockaddr *addr,
+			    const char *myaddr, u16_t port)
 {
 	if (myaddr) {
 		void *inaddr;
@@ -290,18 +299,15 @@ int _net_app_set_local_addr(struct sockaddr *addr, const char *myaddr,
 #if defined(CONFIG_NET_IPV6)
 		net_ipaddr_copy(&net_sin6(addr)->sin6_addr,
 				net_if_ipv6_select_src_addr(NULL,
-					(struct in6_addr *)
-					net_ipv6_unspecified_address()));
+				     &net_sin6(&ctx->ipv6.remote)->sin6_addr));
 #else
 		return -EPFNOSUPPORT;
 #endif
 	} else if (addr->sa_family == AF_INET) {
 #if defined(CONFIG_NET_IPV4)
-		struct net_if *iface = net_if_get_default();
-
-		/* For IPv4 we take the first address in the interface */
 		net_ipaddr_copy(&net_sin(addr)->sin_addr,
-				&iface->ipv4.unicast[0].address.in_addr);
+				net_if_ipv4_select_src_addr(NULL,
+				     &net_sin(&ctx->ipv4.remote)->sin_addr));
 #else
 		return -EPFNOSUPPORT;
 #endif
@@ -409,6 +415,8 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV6)
 			ret = setup_ipv6_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv6;
+			net_sin6(&ctx->ipv6.local)->sin6_port =
+				net_sin6(addr)->sin6_port;
 #else
 			ret = -EPFNOSUPPORT;
 			goto fail;
@@ -417,6 +425,8 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV4)
 			ret = setup_ipv4_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv4;
+			net_sin(&ctx->ipv4.local)->sin_port =
+				net_sin(addr)->sin_port;
 #else
 			ret = -EPFNOSUPPORT;
 			goto fail;
@@ -425,11 +435,15 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV4)
 			ret = setup_ipv4_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv4;
+			net_sin(&ctx->ipv4.local)->sin_port =
+				net_sin(addr)->sin_port;
 #endif
 			/* We ignore the IPv4 error if IPv6 is enabled */
 #if defined(CONFIG_NET_IPV6)
 			ret = setup_ipv6_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv6;
+			net_sin6(&ctx->ipv6.local)->sin6_port =
+				net_sin6(addr)->sin6_port;
 #endif
 		} else {
 			ret = -EINVAL;
@@ -1283,7 +1297,7 @@ int _net_app_tls_sendto(struct net_pkt *pkt,
 		 * a bit and hope things are ok after that. If not, then
 		 * return error.
 		 */
-		k_sleep(MSEC(50));
+		k_sleep(K_MSEC(50));
 
 		if (!ctx->tls.handshake_done) {
 			NET_DBG("TLS handshake not yet done, pkt %p not sent",
@@ -1388,6 +1402,12 @@ static void dtls_cleanup(struct net_app_ctx *ctx, bool cancel_timer)
 
 	/* It might be that ctx is already cleared so check it here */
 	if (ctx->dtls.ctx) {
+		/* Notify peers that we are closing. This must be called
+		 * here as the call in _net_app_ssl_mainloop() is too
+		 * late. Fixes #8605
+		 */
+		mbedtls_ssl_close_notify(&ctx->tls.mbedtls.ssl);
+
 		net_udp_unregister(ctx->dtls.ctx->conn_handler);
 		net_context_put(ctx->dtls.ctx);
 		ctx->dtls.ctx = NULL;
@@ -2011,7 +2031,8 @@ reset:
 	do {
 	again:
 		len = ctx->tls.request_buf_len - 1;
-		memset(ctx->tls.request_buf, 0, ctx->tls.request_buf_len);
+		(void)memset(ctx->tls.request_buf, 0,
+			     ctx->tls.request_buf_len);
 
 		ret = mbedtls_ssl_read(&ctx->tls.mbedtls.ssl,
 				       ctx->tls.request_buf, len);
@@ -2111,7 +2132,18 @@ reset:
 				u16_t pos;
 
 				frag = net_frag_get_pos(pkt, hdr_len, &pos);
-				NET_ASSERT(frag);
+				if (!frag) {
+					/* FIXME: if pos is 0 here, hdr_len
+					 * bytes were successfully skipped.
+					 * Is closing the connection here the
+					 * right thing?
+					 */
+					NET_ERR("could not skip %d bytes",
+						hdr_len);
+					net_pkt_unref(pkt);
+					ret = -EINVAL;
+					goto close;
+				}
 
 				net_pkt_set_appdata(pkt, frag->data + pos);
 			} else {
@@ -2186,7 +2218,7 @@ int _net_app_tls_init(struct net_app_ctx *ctx, int client_or_server)
 	mbedtls_ctr_drbg_init(&ctx->tls.mbedtls.ctr_drbg);
 
 #if defined(MBEDTLS_DEBUG_C) && defined(CONFIG_NET_DEBUG_APP)
-	mbedtls_debug_set_threshold(DEBUG_THRESHOLD);
+	mbedtls_debug_set_threshold(CONFIG_MBEDTLS_DEBUG_LEVEL);
 	mbedtls_ssl_conf_dbg(&ctx->tls.mbedtls.conf, my_debug, NULL);
 #endif
 

@@ -11,22 +11,6 @@
 /* Print extra info about received TLS data */
 #define RX_EXTRA_DEBUG 0
 
-#if defined(MBEDTLS_DEBUG_C)
-#include <mbedtls/debug.h>
-/* - Debug levels (from ext/lib/crypto/mbedtls/include/mbedtls/debug.h)
- *    - 0 No debug
- *    - 1 Error
- *    - 2 State change
- *    - 3 Informational
- *    - 4 Verbose
- */
-#if defined(CONFIG_NET_DEBUG_APP_TLS_LEVEL)
-#define DEBUG_THRESHOLD CONFIG_NET_DEBUG_APP_TLS_LEVEL
-#else
-#define DEBUG_THRESHOLD 0
-#endif /* CONFIG_NET_DEBUG_APP_TLS_LEVEL */
-#endif
-
 #if defined(MBEDTLS_MEMORY_BUFFER_ALLOC_C)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
@@ -66,8 +50,8 @@ void _net_app_received(struct net_context *net_ctx,
 		       struct net_pkt *pkt,
 		       int status,
 		       void *user_data);
-int _net_app_set_local_addr(struct sockaddr *addr, const char *myaddr,
-			    u16_t port);
+int _net_app_set_local_addr(struct net_app_ctx *ctx, struct sockaddr *addr,
+			    const char *myaddr, u16_t port);
 int _net_app_set_net_ctx(struct net_app_ctx *ctx,
 			 struct net_context *net_ctx,
 			 struct sockaddr *addr,

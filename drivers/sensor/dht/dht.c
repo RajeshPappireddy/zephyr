@@ -39,7 +39,7 @@ static s8_t dht_measure_signal_duration(struct dht_data *drv_data,
 		gpio_pin_read(drv_data->gpio, CONFIG_DHT_GPIO_PIN_NUM, &val);
 		elapsed_cycles = k_cycle_get_32() - start_cycles;
 
-		if (elapsed_cycles >= max_wait_cycles) {
+		if (elapsed_cycles > max_wait_cycles) {
 			return -1;
 		}
 	} while (val == signal_val);
@@ -126,7 +126,7 @@ static int dht_sample_fetch(struct device *dev, enum sensor_channel chan)
 
 	/* store bits in buf */
 	j = 0;
-	memset(buf, 0, sizeof(buf));
+	(void)memset(buf, 0, sizeof(buf));
 	for (i = 0; i < DHT_DATA_BITS_NUM; i++) {
 		if (signal_duration[i] >= avg_duration) {
 			buf[j] = (buf[j] << 1) | 1;
@@ -162,7 +162,7 @@ static int dht_channel_get(struct device *dev,
 {
 	struct dht_data *drv_data = dev->driver_data;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_TEMP || chan == SENSOR_CHAN_HUMIDITY);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_AMBIENT_TEMP || chan == SENSOR_CHAN_HUMIDITY);
 
 	/* see data calculation example from datasheet */
 #if defined(CONFIG_DHT_CHIP_DHT11)
@@ -170,7 +170,7 @@ static int dht_channel_get(struct device *dev,
 	if (chan == SENSOR_CHAN_HUMIDITY) {
 		val->val1 = drv_data->sample[0];
 		val->val2 = 0;
-	} else { /* chan == SENSOR_CHAN_TEMP */
+	} else { /* chan == SENSOR_CHAN_AMBIENT_TEMP */
 		val->val1 = drv_data->sample[2];
 		val->val2 = 0;
 	}
@@ -185,7 +185,7 @@ static int dht_channel_get(struct device *dev,
 		raw_val = (drv_data->sample[0] << 8) | drv_data->sample[1];
 		val->val1 = raw_val / 10;
 		val->val2 = (raw_val % 10) * 100000;
-	} else { /* chan == SENSOR_CHAN_TEMP */
+	} else { /* chan == SENSOR_CHAN_AMBIENT_TEMP */
 		raw_val = (drv_data->sample[2] << 8) | drv_data->sample[3];
 
 		sign = raw_val & 0x8000;

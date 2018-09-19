@@ -46,7 +46,7 @@ struct vl53l0x_data {
 static int vl53l0x_sample_fetch(struct device *dev, enum sensor_channel chan)
 {
 	struct vl53l0x_data *drv_data = dev->driver_data;
-	u8_t ret;
+	VL53L0X_Error ret;
 
 	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL
 			|| chan == SENSOR_CHAN_DISTANCE
@@ -196,12 +196,14 @@ exit:
 static int vl53l0x_init(struct device *dev)
 {
 	struct vl53l0x_data *drv_data = dev->driver_data;
-	u8_t ret;
+	VL53L0X_Error ret;
 	u16_t vl53l0x_id = 0;
 	VL53L0X_DeviceInfo_t vl53l0x_dev_info;
-	struct device *gpio;
 
 	SYS_LOG_DBG("enter in %s", __func__);
+
+#ifdef CONFIG_VL53L0X_XSHUT_CONTROL_ENABLE
+	struct device *gpio;
 
 	/* configure and set VL53L0X_XSHUT_Pin */
 	gpio = device_get_binding(CONFIG_VL53L0X_XSHUT_GPIO_DEV_NAME);
@@ -222,6 +224,7 @@ static int vl53l0x_init(struct device *dev)
 
 	gpio_pin_write(gpio, CONFIG_VL53L0X_XSHUT_GPIO_PIN_NUM, 1);
 	k_sleep(100);
+#endif
 
 	drv_data->i2c = device_get_binding(CONFIG_VL53L0X_I2C_MASTER_DEV_NAME);
 	if (drv_data->i2c == NULL) {
@@ -234,7 +237,7 @@ static int vl53l0x_init(struct device *dev)
 	drv_data->vl53l0x.I2cDevAddr = CONFIG_VL53L0X_I2C_ADDR;
 
 	/* Get info from sensor */
-	memset(&vl53l0x_dev_info, 0, sizeof(VL53L0X_DeviceInfo_t));
+	(void)memset(&vl53l0x_dev_info, 0, sizeof(VL53L0X_DeviceInfo_t));
 
 	ret = VL53L0X_GetDeviceInfo(&drv_data->vl53l0x, &vl53l0x_dev_info);
 	if (ret < 0) {

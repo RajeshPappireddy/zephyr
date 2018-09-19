@@ -10,8 +10,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _DMA_H_
-#define _DMA_H_
+#ifndef ZEPHYR_INCLUDE_DMA_H_
+#define ZEPHYR_INCLUDE_DMA_H_
 
 #include <kernel.h>
 #include <device.h>
@@ -32,6 +32,13 @@ enum dma_channel_direction {
 	MEMORY_TO_MEMORY = 0x0,
 	MEMORY_TO_PERIPHERAL,
 	PERIPHERAL_TO_MEMORY
+};
+
+/** Valid values for @a source_addr_adj and @a dest_addr_adj */
+enum dma_addr_adj {
+	DMA_ADDR_ADJ_INCREMENT,
+	DMA_ADDR_ADJ_DECREMENT,
+	DMA_ADDR_ADJ_NO_CHANGE,
 };
 
 /**
@@ -299,4 +306,4 @@ static inline u32_t dma_burst_index(u32_t burst)
 
 #include <syscalls/dma.h>
 
-#endif /* _DMA_H_ */
+#endif /* ZEPHYR_INCLUDE_DMA_H_ */

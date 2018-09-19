@@ -25,7 +25,6 @@
 #include "common/log.h"
 
 #include "hal/debug.h"
-#include "pdu.h"
 
 /* Hardware whitelist */
 static struct ll_filter wl_filter;
@@ -352,8 +351,6 @@ static void filter_wl_update(void)
 	u8_t i;
 
 	/* Populate filter from wl peers */
-	filter_clear(&wl_filter);
-
 	for (i = 0; i < WL_SIZE; i++) {
 		u8_t j;
 
@@ -375,9 +372,7 @@ static void filter_rl_update(void)
 {
 	u8_t i;
 
-	/* No whitelist: populate filter from rl peers */
-	filter_clear(&rl_filter);
-
+	/* Populate filter from rl peers */
 	for (i = 0; i < CONFIG_BT_CTLR_RL_SIZE; i++) {
 		if (rl[i].taken) {
 			filter_insert(&rl_filter, i, rl[i].id_addr_type,
@@ -388,11 +383,17 @@ static void filter_rl_update(void)
 
 void ll_filters_adv_update(u8_t adv_fp)
 {
+	/* Clear before populating filter */
+	filter_clear(&wl_filter);
+
 	/* enabling advertising */
 	if (adv_fp && !(radio_scan_filter_pol_get() & 0x1)) {
 		/* whitelist not in use, update whitelist */
 		filter_wl_update();
 	}
+
+	/* Clear before populating rl filter */
+	filter_clear(&rl_filter);
 
 	if (rl_enable && !ll_scan_is_enabled()) {
 		/* rl not in use, update resolving list LUT */
@@ -402,11 +403,17 @@ void ll_filters_adv_update(u8_t adv_fp)
 
 void ll_filters_scan_update(u8_t scan_fp)
 {
+	/* Clear before populating filter */
+	filter_clear(&wl_filter);
+
 	/* enabling advertising */
 	if ((scan_fp & 0x1) && !radio_adv_filter_pol_get()) {
 		/* whitelist not in use, update whitelist */
 		filter_wl_update();
 	}
+
+	/* Clear before populating rl filter */
+	filter_clear(&rl_filter);
 
 	if (rl_enable && !ll_adv_is_enabled()) {
 		/* rl not in use, update resolving list LUT */
@@ -752,7 +759,7 @@ u32_t ll_rl_add(bt_addr_le_t *id_addr, const u8_t pirk[16],
 		memcpy(rl[i].local_irk, lirk, 16);
 		rl[i].local_rpa = NULL;
 	}
-	memset(rl[i].curr_rpa.val, 0x00, sizeof(rl[i].curr_rpa));
+	(void)memset(rl[i].curr_rpa.val, 0x00, sizeof(rl[i].curr_rpa));
 	rl[i].rpas_ready = 0;
 	/* Default to Network Privacy */
 	rl[i].dev = 0;

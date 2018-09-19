@@ -430,7 +430,7 @@ static int l2cap_br_info_req(struct bt_l2cap_br *l2cap, u8_t ident,
 		rsp->type = sys_cpu_to_le16(BT_L2CAP_INFO_FIXED_CHAN);
 		rsp->result = sys_cpu_to_le16(BT_L2CAP_INFO_SUCCESS);
 		/* fixed channel mask protocol data is 8 octets wide */
-		memset(net_buf_add(rsp_buf, 8), 0, 8);
+		(void)memset(net_buf_add(rsp_buf, 8), 0, 8);
 		rsp->data[0] = get_fixed_channels_mask();
 
 		hdr_info->len = sys_cpu_to_le16(sizeof(*rsp) + 8);
@@ -519,7 +519,7 @@ static void l2cap_br_conf(struct bt_l2cap_chan *chan)
 	hdr->code = BT_L2CAP_CONF_REQ;
 	hdr->ident = l2cap_br_get_ident();
 	conf = net_buf_add(buf, sizeof(*conf));
-	memset(conf, 0, sizeof(*conf));
+	(void)memset(conf, 0, sizeof(*conf));
 
 	conf->dcid = sys_cpu_to_le16(BR_CHAN(chan)->tx.cid);
 	/*
@@ -757,7 +757,7 @@ static void l2cap_br_conn_req(struct bt_l2cap_br *l2cap, u8_t ident,
 	/* Reply on connection request as acceptor */
 	l2cap_br_conn_req_reply(chan, result);
 
-	if (result != BT_L2CAP_SUCCESS) {
+	if (result != BT_L2CAP_BR_SUCCESS) {
 		/* Disconnect link when security rules were violated */
 		if (result == BT_L2CAP_BR_ERR_SEC_BLOCK) {
 			bt_conn_disconnect(conn,
@@ -1009,7 +1009,7 @@ send_rsp:
 	hdr->code = BT_L2CAP_CONF_RSP;
 	hdr->ident = ident;
 	rsp = net_buf_add(buf, sizeof(*rsp));
-	memset(rsp, 0, sizeof(*rsp));
+	(void)memset(rsp, 0, sizeof(*rsp));
 
 	rsp->result = sys_cpu_to_le16(result);
 	rsp->scid = sys_cpu_to_le16(BR_CHAN(chan)->tx.cid);
@@ -1440,7 +1440,7 @@ static void l2cap_br_conn_pend(struct bt_l2cap_chan *chan, u8_t status)
 	 * For incoming connection state send confirming outstanding
 	 * response and initiate configuration request.
 	 */
-	if (l2cap_br_conn_req_reply(chan, BT_L2CAP_SUCCESS) == 0) {
+	if (l2cap_br_conn_req_reply(chan, BT_L2CAP_BR_SUCCESS) == 0) {
 		bt_l2cap_chan_set_state(chan, BT_L2CAP_CONFIG);
 		/*
 		 * Initialize config request since remote needs to know

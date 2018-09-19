@@ -346,6 +346,8 @@
 #define SW_SWITCH_TIMER_EVTS_COMP_S2_BASE 5
 #undef HAL_EVENT_TIMER_SAMPLE_CC_OFFSET
 #define HAL_EVENT_TIMER_SAMPLE_CC_OFFSET 2
+#undef HAL_EVENT_TIMER_SAMPLE_TASK
+#define HAL_EVENT_TIMER_SAMPLE_TASK NRF_TIMER_TASK_CAPTURE2
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 #define SW_SWITCH_TIMER NRF_TIMER1
@@ -355,6 +357,13 @@
 
 #define SW_SWITCH_TIMER_TASK_GROUP_BASE 0
 #endif /* !CONFIG_BT_CTLR_TIFS_HW */
+
+static inline void hal_radio_reset(void)
+{
+	/* Anomalies 102, 106 and 107 */
+	*(volatile u32_t *)0x40001774 = ((*(volatile u32_t *)0x40001774) &
+					 0xfffffffe) | 0x01000000;
+}
 
 static inline void hal_radio_ram_prio_setup(void)
 {
@@ -440,6 +449,11 @@ static inline u32_t hal_radio_phy_mode_get(u8_t phy, u8_t flags)
 	}
 
 	return mode;
+}
+
+static inline u32_t hal_radio_tx_power_max_get(void)
+{
+	return RADIO_TXPOWER_TXPOWER_Pos8dBm;
 }
 
 static inline u32_t hal_radio_tx_ready_delay_us_get(u8_t phy, u8_t flags)

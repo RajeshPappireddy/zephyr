@@ -19,10 +19,10 @@
 extern int flash_map_entries;
 struct flash_sector fs_sectors[256];
 
-/*
- * Test flash_area_to_sectors()
+/**
+ * @brief Test flash_area_to_sectors()
  */
-void flash_map_test_case_2(void)
+void test_flash_area_to_sectors(void)
 {
 	const struct flash_area *fa;
 	u32_t sec_cnt;
@@ -38,11 +38,19 @@ void flash_map_test_case_2(void)
 
 	/* First erase the area so it's ready for use. */
 	flash_dev = device_get_binding(FLASH_DEV_NAME);
+
+	rc = flash_write_protection_set(flash_dev, false);
+	zassert_false(rc, "failed to disable flash write protection");
+
 	rc = flash_erase(flash_dev, fa->fa_off, fa->fa_size);
 	zassert_true(rc == 0, "flash area erase fail");
 
-	memset(wd, 0xa5, sizeof(wd));
+	rc = flash_write_protection_set(flash_dev, true);
+	zassert_false(rc, "failed to enable flash write protection");
 
+	(void)memset(wd, 0xa5, sizeof(wd));
+
+	sec_cnt = ARRAY_SIZE(fs_sectors);
 	rc = flash_area_get_sectors(FLASH_AREA_IMAGE_1, &sec_cnt, fs_sectors);
 	zassert_true(rc == 0, "flash_area_get_sectors failed");
 
@@ -67,7 +75,7 @@ void flash_map_test_case_2(void)
 		zassert_true(rc == 0, "hal_flash_write() fail");
 
 		/* and read it back */
-		memset(rd, 0, sizeof(rd));
+		(void)memset(rd, 0, sizeof(rd));
 		rc = flash_area_read(fa, off + fs_sectors[i].fs_size -
 					 sizeof(rd),
 				     rd, sizeof(rd));
@@ -84,7 +92,7 @@ void flash_map_test_case_2(void)
 	zassert_true(rc == 0, "read data != write data");
 
 	/* should read back ff all throughout*/
-	memset(wd, 0xff, sizeof(wd));
+	(void)memset(wd, 0xff, sizeof(wd));
 	for (off = 0; off < fa->fa_size; off += sizeof(rd)) {
 		rc = flash_area_read(fa, off, rd, sizeof(rd));
 		zassert_true(rc == 0, "hal_flash_read() fail");
@@ -95,9 +103,9 @@ void flash_map_test_case_2(void)
 
 }
 
-void test_main(void *p1, void *p2, void *p3)
+void test_main(void)
 {
 	ztest_test_suite(test_flash_map,
-			 ztest_unit_test(flash_map_test_case_2));
+			 ztest_unit_test(test_flash_area_to_sectors));
 	ztest_run_test_suite(test_flash_map);
 }

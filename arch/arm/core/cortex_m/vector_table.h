@@ -18,8 +18,8 @@
  * No other symbol has the same format, so they are easy to spot.
  */
 
-#ifndef _VECTOR_TABLE__H_
-#define _VECTOR_TABLE__H_
+#ifndef ZEPHYR_ARCH_ARM_CORE_CORTEX_M_VECTOR_TABLE_H_
+#define ZEPHYR_ARCH_ARM_CORE_CORTEX_M_VECTOR_TABLE_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,6 +44,9 @@ GTEXT(__svc)
 GTEXT(__mpu_fault)
 GTEXT(__bus_fault)
 GTEXT(__usage_fault)
+#if defined(CONFIG_ARM_SECURE_FIRMWARE)
+GTEXT(__secure_fault)
+#endif /* CONFIG_ARM_SECURE_FIRMWARE */
 GTEXT(__svc)
 GTEXT(__debug_monitor)
 #else
@@ -65,4 +68,4 @@ extern void *_vector_table[];
 }
 #endif
 
-#endif /* _VECTOR_TABLE__H_ */
+#endif /* ZEPHYR_ARCH_ARM_CORE_CORTEX_M_VECTOR_TABLE_H_ */

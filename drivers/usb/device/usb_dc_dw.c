@@ -14,13 +14,16 @@
  * level control routines to deal directly with the hardware.
  */
 
-#include <soc.h>
 #include <string.h>
 #include <stdio.h>
 #include <misc/byteorder.h>
 #include <usb/usb_dc.h>
+#include <usb/usb_device.h>
 #include "usb_dw_registers.h"
+#include <soc.h>
+#ifdef CONFIG_QMSI
 #include "clk.h"
+#endif
 
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_USB_DRIVER_LEVEL
 #include <logging/sys_log.h>
@@ -41,7 +44,7 @@
 struct usb_ep_ctrl_prv {
 	u8_t ep_ena;
 	u8_t fifo_num;
-	u8_t fifo_size;
+	u32_t fifo_size;
 	u16_t mps;         /* Max ep pkt size */
 	usb_dc_ep_callback cb;/* Endpoint callback function */
 	u32_t data_len;
@@ -420,6 +423,12 @@ static int usb_dw_tx(u8_t ep, const u8_t *const data,
 		return -EAGAIN;
 	}
 
+	/* For now tx-fifo sizes are not configured (cf usb_dw_set_fifo). Here
+	 * we force available fifo size to be a multiple of ep mps in order to
+	 * prevent splitting data incorrectly.
+	 */
+	avail_space -= avail_space % ep_mps;
+
 	if (data_len > avail_space) {
 		data_len = avail_space;
 	}
@@ -517,8 +526,17 @@ static int usb_dw_init(void)
 		return ret;
 	}
 
-	/* Set device speed to FS */
+#ifdef CONFIG_USB_DW_USB_2_0
+	/* set the PHY interface to be 16-bit UTMI */
+	USB_DW->gusbcfg = (USB_DW->gusbcfg & ~USB_DW_GUSBCFG_PHY_IF_MASK) |
+		USB_DW_GUSBCFG_PHY_IF_16_BIT;
+
+	/* Set USB2.0 High Speed */
+	USB_DW->dcfg |= USB_DW_DCFG_DEV_SPD_USB2_HS;
+#else
+	/* Set device speed to Full Speed */
 	USB_DW->dcfg |= USB_DW_DCFG_DEV_SPD_FS;
+#endif
 
 	/* Set NAK for all OUT EPs */
 	for (ep = 0; ep < USB_DW_OUT_EP_NUM; ep++) {
@@ -783,7 +801,7 @@ int usb_dc_reset(void)
 	ret = usb_dw_reset();
 
 	/* Clear private data */
-	memset(&usb_dw_ctrl, 0, sizeof(usb_dw_ctrl));
+	(void)memset(&usb_dw_ctrl, 0, sizeof(usb_dw_ctrl));
 
 	return ret;
 }
@@ -796,6 +814,38 @@ int usb_dc_set_address(const u8_t addr)
 
 	USB_DW->dcfg &= ~USB_DW_DCFG_DEV_ADDR_MASK;
 	USB_DW->dcfg |= addr << USB_DW_DCFG_DEV_ADDR_OFFSET;
+
+	return 0;
+}
+
+int usb_dc_ep_check_cap(const struct usb_dc_ep_cfg_data * const cfg)
+{
+	u8_t ep_idx = USB_DW_EP_ADDR2IDX(cfg->ep_addr);
+
+	SYS_LOG_DBG("ep %x, mps %d, type %d", cfg->ep_addr, cfg->ep_mps,
+		    cfg->ep_type);
+
+	if ((cfg->ep_type == USB_DC_EP_CONTROL) && ep_idx) {
+		SYS_LOG_ERR("invalid endpoint configuration");
+		return -1;
+	}
+
+	if (cfg->ep_mps > DW_USB_MAX_PACKET_SIZE) {
+		SYS_LOG_WRN("unsupported packet size");
+		return -1;
+	}
+
+	if ((USB_DW_EP_ADDR2DIR(cfg->ep_addr) == USB_EP_DIR_OUT) &&
+	    (ep_idx >= DW_USB_OUT_EP_NUM)) {
+		SYS_LOG_WRN("OUT endpoint address out of range");
+		return -1;
+	}
+
+	if ((USB_DW_EP_ADDR2DIR(cfg->ep_addr) == USB_EP_DIR_IN) &&
+	    (ep_idx >= DW_USB_IN_EP_NUM)) {
+		SYS_LOG_WRN("IN endpoint address out of range");
+		return -1;
+	}
 
 	return 0;
 }
@@ -931,8 +981,9 @@ int usb_dc_ep_enable(const u8_t ep)
 		usb_dw_ctrl.in_ep_ctrl[ep_idx].ep_ena = 1;
 	}
 
-	if (USB_DW_EP_ADDR2DIR(ep) == USB_EP_DIR_OUT) {
-		/* Prepare EP for  rx */
+	if (USB_DW_EP_ADDR2DIR(ep) == USB_EP_DIR_OUT &&
+		usb_dw_ctrl.out_ep_ctrl[ep_idx].cb != usb_transfer_ep_callback) {
+		/* Start reading now, except for transfer managed eps */
 		usb_dw_prep_rx(ep, 0);
 	}
 
@@ -1173,4 +1224,15 @@ int usb_dc_set_status_callback(const usb_dc_status_callback cb)
 	usb_dw_ctrl.status_cb = cb;
 
 	return 0;
+}
+
+int usb_dc_ep_mps(const u8_t ep)
+{
+	enum usb_dw_out_ep_idx ep_idx = USB_DW_EP_ADDR2IDX(ep);
+
+	if (USB_DW_EP_ADDR2DIR(ep) == USB_EP_DIR_OUT) {
+		return usb_dw_ctrl.out_ep_ctrl[ep_idx].mps;
+	} else {
+		return usb_dw_ctrl.in_ep_ctrl[ep_idx].mps;
+	}
 }

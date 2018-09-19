@@ -9,8 +9,8 @@
  * @brief Network Events code public header
  */
 
-#ifndef __NET_EVENT_H__
-#define __NET_EVENT_H__
+#ifndef ZEPHYR_INCLUDE_NET_NET_EVENT_H_
+#define ZEPHYR_INCLUDE_NET_NET_EVENT_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -183,13 +183,7 @@ struct net_event_ipv6_route {
 	u8_t prefix_len;
 };
 
-/* Maximum size of "struct net_event_ipv6_addr" or
- * "struct net_event_ipv6_nbr" or "struct net_event_ipv6_route".
- * NOTE: Update comments here and calculate which struct occupies max size.
- */
-#define NET_EVENT_INFO_MAX_SIZE sizeof(struct net_event_ipv6_route)
-
-#endif
+#endif /* CONFIG_NET_MGMT_EVENT_INFO */
 
 #ifdef __cplusplus
 }
@@ -199,4 +193,4 @@ struct net_event_ipv6_route {
  * @}
  */
 
-#endif /* __NET_EVENT_H__ */
+#endif /* ZEPHYR_INCLUDE_NET_NET_EVENT_H_ */

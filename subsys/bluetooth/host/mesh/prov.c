@@ -34,8 +34,7 @@
 #include "prov.h"
 
 /* 3 transmissions, 20ms interval */
-#define PROV_XMIT_COUNT        2
-#define PROV_XMIT_INT          20
+#define PROV_XMIT              BT_MESH_TRANSMIT(2, 20)
 
 #define AUTH_METHOD_NO_OOB     0x00
 #define AUTH_METHOD_STATIC     0x01
@@ -239,7 +238,7 @@ static void reset_link(void)
 	}
 
 	/* Clear everything except the retransmit delayed work config */
-	memset(&link, 0, offsetof(struct prov_link, tx.retransmit));
+	(void)memset(&link, 0, offsetof(struct prov_link, tx.retransmit));
 
 	link.rx.prev_id = XACT_NVAL;
 
@@ -264,8 +263,7 @@ static struct net_buf *adv_buf_create(void)
 {
 	struct net_buf *buf;
 
-	buf = bt_mesh_adv_create(BT_MESH_ADV_PROV, PROV_XMIT_COUNT,
-				 PROV_XMIT_INT, BUF_TIMEOUT);
+	buf = bt_mesh_adv_create(BT_MESH_ADV_PROV, PROV_XMIT, BUF_TIMEOUT);
 	if (!buf) {
 		BT_ERR("Out of provisioning buffers");
 		return NULL;
@@ -605,7 +603,7 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			return -EINVAL;
 		}
 
-		memset(link.auth, 0, sizeof(link.auth));
+		(void)memset(link.auth, 0, sizeof(link.auth));
 		return 0;
 	case AUTH_METHOD_STATIC:
 		if (action || size) {
@@ -614,7 +612,8 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 
 		memcpy(link.auth + 16 - prov->static_val_len,
 		       prov->static_val, prov->static_val_len);
-		memset(link.auth, 0, sizeof(link.auth) - prov->static_val_len);
+		(void)memset(link.auth, 0,
+			     sizeof(link.auth) - prov->static_val_len);
 		return 0;
 
 	case AUTH_METHOD_OUTPUT:
@@ -649,7 +648,8 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			str[size] = '\0';
 
 			memcpy(link.auth, str, size);
-			memset(link.auth + size, 0, sizeof(link.auth) - size);
+			(void)memset(link.auth + size, 0,
+				     sizeof(link.auth) - size);
 
 			return prov->output_string((char *)str);
 		} else {
@@ -661,7 +661,7 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			num %= div[size - 1];
 
 			sys_put_be32(num, &link.auth[12]);
-			memset(link.auth, 0, 12);
+			(void)memset(link.auth, 0, 12);
 
 			return prov->output_number(output, num);
 		}
@@ -993,6 +993,15 @@ static void prov_random(const u8_t *data)
 	link.expect = PROV_DATA;
 }
 
+static inline bool is_pb_gatt(void)
+{
+#if defined(CONFIG_BT_MESH_PB_GATT)
+	return !!link.conn;
+#else
+	return false;
+#endif
+}
+
 static void prov_data(const u8_t *data)
 {
 	PROV_BUF(msg, 1);
@@ -1005,6 +1014,7 @@ static void prov_data(const u8_t *data)
 	u16_t addr;
 	u16_t net_idx;
 	int err;
+	bool identity_enable;
 
 	BT_DBG("");
 
@@ -1056,7 +1066,21 @@ static void prov_data(const u8_t *data)
 	/* Ignore any further PDUs on this link */
 	link.expect = 0;
 
-	bt_mesh_provision(pdu, net_idx, flags, iv_index, 0, addr, dev_key);
+	/* Store info, since bt_mesh_provision() will end up clearing it */
+	if (IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY)) {
+		identity_enable = is_pb_gatt();
+	} else {
+		identity_enable = false;
+	}
+
+	bt_mesh_provision(pdu, net_idx, flags, iv_index, addr, dev_key);
+
+	/* After PB-GATT provisioning we should start advertising
+	 * using Node Identity.
+	 */
+	if (identity_enable) {
+		bt_mesh_proxy_identity_enable();
+	}
 }
 
 static void prov_complete(const u8_t *data)
@@ -1518,7 +1542,7 @@ int bt_mesh_pb_gatt_close(struct bt_conn *conn)
 	bt_conn_unref(link.conn);
 
 	pub_key = atomic_test_bit(link.flags, LOCAL_PUB_KEY);
-	memset(&link, 0, sizeof(link));
+	(void)memset(&link, 0, sizeof(link));
 
 	if (pub_key) {
 		atomic_set_bit(link.flags, LOCAL_PUB_KEY);
@@ -1570,12 +1594,6 @@ int bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
 #endif
 
 #endif /* CONFIG_BT_MESH_PB_ADV */
-
-	if (IS_ENABLED(CONFIG_BT_DEBUG)) {
-		struct bt_uuid_128 uuid = { .uuid.type = BT_UUID_TYPE_128 };
-		memcpy(uuid.val, prov->uuid, 16);
-		BT_INFO("Device UUID: %s", bt_uuid_str(&uuid.uuid));
-	}
 
 	return 0;
 }

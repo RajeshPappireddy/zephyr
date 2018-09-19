@@ -11,11 +11,8 @@
  * Stack helper functions.
  */
 
-#ifndef _ARM_CORTEXM_STACK__H_
-#define _ARM_CORTEXM_STACK__H_
-
-#include <kernel_structs.h>
-#include <asm_inline.h>
+#ifndef ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_STACK_H_
+#define ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_STACK_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +23,8 @@ extern "C" {
 /* nothing */
 
 #else
+
+#include "arch/arm/cortex_m/cmsis.h"
 
 extern K_THREAD_STACK_DEFINE(_interrupt_stack, CONFIG_ISR_STACK_SIZE);
 
@@ -48,7 +47,14 @@ static ALWAYS_INLINE void _InterruptStackSetup(void)
 			    CONFIG_ISR_STACK_SIZE);
 #endif
 
-	_MspSet(msp);
+	__set_MSP(msp);
+#if defined(CONFIG_BUILTIN_STACK_GUARD)
+#if defined(CONFIG_CPU_CORTEX_M_HAS_SPLIM)
+	__set_MSPLIM((u32_t)_interrupt_stack);
+#else
+#error "Built-in MSP limit checks not supported by HW"
+#endif
+#endif /* CONFIG_BUILTIN_STACK_GUARD */
 }
 
 #endif /* _ASMLANGUAGE */
@@ -57,4 +63,4 @@ static ALWAYS_INLINE void _InterruptStackSetup(void)
 }
 #endif
 
-#endif /* _ARM_CORTEXM_STACK__H_ */
+#endif /* ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_STACK_H_ */

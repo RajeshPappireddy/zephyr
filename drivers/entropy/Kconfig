@@ -7,9 +7,7 @@
 #
 
 menuconfig ENTROPY_GENERATOR
-	bool
-	prompt "Entropy Drivers"
-	default n
+	bool "Entropy Drivers"
 	help
 	  Include entropy drivers in system config.
 
@@ -19,10 +17,10 @@ source "drivers/entropy/Kconfig.mcux"
 source "drivers/entropy/Kconfig.stm32"
 source "drivers/entropy/Kconfig.esp32"
 source "drivers/entropy/Kconfig.nrf5"
+source "drivers/entropy/Kconfig.native_posix"
 
 config ENTROPY_HAS_DRIVER
 	bool
-	default n
 	help
 	  This is an option to be enabled by individual entropy driver
 	  to signal that there is a true entropy driver.

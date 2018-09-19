@@ -11,11 +11,10 @@
  * Exception/interrupt context helpers.
  */
 
-#ifndef _ARM_CORTEXM_ISR__H_
-#define _ARM_CORTEXM_ISR__H_
+#ifndef ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_EXC_H_
+#define ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_EXC_H_
 
 #include <arch/cpu.h>
-#include <asm_inline.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,12 +27,17 @@ extern "C" {
 #else
 
 #include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/cortex_m/exc.h>
 #include <irq_offload.h>
 
 #ifdef CONFIG_IRQ_OFFLOAD
 extern volatile irq_offload_routine_t offload_routine;
 #endif
 
+/* Writes to the AIRCR must be accompanied by a write of the value 0x05FA
+ * to the Vector Key field, otherwise the writes are ignored.
+ */
+#define AIRCR_VECT_KEY_PERMIT_WRITE 0x05FAUL
 /**
  *
  * @brief Find out if running in an ISR context
@@ -47,7 +51,7 @@ extern volatile irq_offload_routine_t offload_routine;
  */
 static ALWAYS_INLINE int _IsInIsr(void)
 {
-	u32_t vector = _IpsrGet();
+	u32_t vector = __get_IPSR();
 
 	/* IRQs + PendSV (14) + SYSTICK (15) are interrupts. */
 	return (vector > 13)
@@ -79,8 +83,6 @@ static ALWAYS_INLINE int _IsInIsr(void)
 		;
 }
 
-#define _EXC_SVC_PRIO 0
-#define _EXC_FAULT_PRIO 0
 /**
  * @brief Setup system exceptions
  *
@@ -103,11 +105,36 @@ static ALWAYS_INLINE void _ExcSetup(void)
 	NVIC_SetPriority(MemoryManagement_IRQn, _EXC_FAULT_PRIO);
 	NVIC_SetPriority(BusFault_IRQn, _EXC_FAULT_PRIO);
 	NVIC_SetPriority(UsageFault_IRQn, _EXC_FAULT_PRIO);
+#if defined(CONFIG_ARM_SECURE_FIRMWARE)
+	NVIC_SetPriority(SecureFault_IRQn, _EXC_FAULT_PRIO);
+#endif /* CONFIG_ARM_SECURE_FIRMWARE */
 
 	/* Enable Usage, Mem, & Bus Faults */
 	SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
 		      SCB_SHCSR_BUSFAULTENA_Msk;
-#endif
+#if defined(CONFIG_ARM_SECURE_FIRMWARE)
+	/* Enable Secure Fault */
+	SCB->SHCSR |= SCB_SHCSR_SECUREFAULTENA_Msk;
+	/* Clear BFAR before setting BusFaults to target Non-Secure state. */
+	SCB->BFAR = 0;
+#endif /* CONFIG_ARM_SECURE_FIRMWARE */
+#endif /* CONFIG_CPU_CORTEX_M_HAS_PROGRAMMABLE_FAULT_PRIOS */
+
+#if defined(CONFIG_ARM_SECURE_FIRMWARE)
+	/* Set NMI, Hard, and Bus Faults as Non-Secure.
+	 * NMI and Bus Faults targeting the Secure state will
+	 * escalate to a SecureFault or SecureHardFault.
+	 */
+	SCB->AIRCR =
+		(SCB->AIRCR & (~(SCB_AIRCR_VECTKEY_Msk)))
+		| SCB_AIRCR_BFHFNMINS_Msk
+		| ((AIRCR_VECT_KEY_PERMIT_WRITE << SCB_AIRCR_VECTKEY_Pos) &
+			SCB_AIRCR_VECTKEY_Msk);
+	/* Note: Fault conditions that would generate a SecureFault
+	 * in a PE with the Main Extension instead generate a
+	 * SecureHardFault in a PE without the Main Extension.
+	 */
+#endif /* CONFIG_ARM_SECURE_FIRMWARE */
 }
 
 /**
@@ -140,4 +167,4 @@ static ALWAYS_INLINE void _ClearFaults(void)
 #endif
 
 
-#endif /* _ARM_CORTEXM_ISR__H_ */
+#endif /* ZEPHYR_ARCH_ARM_INCLUDE_CORTEX_M_EXC_H_ */

@@ -1,5 +1,6 @@
 ---
 title: ARMv8-M NVIC Interrupt Controller
+id: arm,v8m-nvic
 version: 0.1
 
 description: >
@@ -11,6 +12,7 @@ properties:
       type: string
       description: compatible strings
       constraint: "arm,v8m-nvic"
+      generation: define
 
     reg:
       category: required
@@ -23,8 +25,6 @@ properties:
       type: int
       description: number of bits of IRQ priorities
       generation: define
-
-cell_string: IRQ
 
 "#cells":
   - irq

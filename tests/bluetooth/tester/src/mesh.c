@@ -29,7 +29,6 @@ static u8_t net_key[16];
 static u16_t net_key_idx;
 static u8_t flags;
 static u32_t iv_index;
-static u32_t seq_num;
 static u16_t addr;
 static u8_t dev_key[16];
 static u8_t input_size;
@@ -66,7 +65,7 @@ static void supported_commands(u8_t *data, u16_t len)
 	net_buf_simple_init(buf, 0);
 
 	/* 1st octet */
-	memset(net_buf_simple_add(buf, 1), 0, 1);
+	(void)memset(net_buf_simple_add(buf, 1), 0, 1);
 	tester_set_bit(buf->data, MESH_READ_SUPPORTED_COMMANDS);
 	tester_set_bit(buf->data, MESH_CONFIG_PROVISIONING);
 	tester_set_bit(buf->data, MESH_PROVISION_NODE);
@@ -84,12 +83,13 @@ static void supported_commands(u8_t *data, u16_t len)
 	tester_set_bit(buf->data, MESH_LPN_POLL);
 	tester_set_bit(buf->data, MESH_MODEL_SEND);
 	/* 3rd octet */
-	memset(net_buf_simple_add(buf, 1), 0, 1);
+	(void)memset(net_buf_simple_add(buf, 1), 0, 1);
 #if defined(CONFIG_BT_TESTING)
 	tester_set_bit(buf->data, MESH_LPN_SUBSCRIBE);
 	tester_set_bit(buf->data, MESH_LPN_UNSUBSCRIBE);
 	tester_set_bit(buf->data, MESH_RPL_CLEAR);
 #endif /* CONFIG_BT_TESTING */
+	tester_set_bit(buf->data, MESH_PROXY_IDENTITY);
 
 	tester_send(BTP_SERVICE_ID_MESH, MESH_READ_SUPPORTED_COMMANDS,
 		    CONTROLLER_INDEX, buf->data, buf->len);
@@ -164,7 +164,7 @@ static int fault_clear(struct bt_mesh_model *model, uint16_t company_id)
 		return -EINVAL;
 	}
 
-	memset(reg_faults, 0, sizeof(reg_faults));
+	(void)memset(reg_faults, 0, sizeof(reg_faults));
 
 	return 0;
 }
@@ -289,7 +289,7 @@ static void link_close(bt_mesh_prov_bearer_t bearer)
 		    CONTROLLER_INDEX, (u8_t *) &ev, sizeof(ev));
 }
 
-static int output_number(bt_mesh_output_action_t action, uint32_t number)
+static int output_number(bt_mesh_output_action_t action, u32_t number)
 {
 	struct mesh_out_number_action_ev ev;
 
@@ -410,7 +410,6 @@ static void provision_node(u8_t *data, u16_t len)
 	flags = cmd->flags;
 	iv_index = sys_le32_to_cpu(cmd->iv_index);
 	net_key_idx = sys_le16_to_cpu(cmd->net_key_idx);
-	seq_num = sys_le32_to_cpu(cmd->seq_num);
 
 	tester_rsp(BTP_SERVICE_ID_MESH, MESH_PROVISION_NODE,
 		   CONTROLLER_INDEX, BTP_STATUS_SUCCESS);
@@ -432,7 +431,7 @@ static void init(u8_t *data, u16_t len)
 
 	if (addr) {
 		err = bt_mesh_provision(net_key, net_key_idx, flags, iv_index,
-					seq_num, addr, dev_key);
+					addr, dev_key);
 		if (err) {
 			status = BTP_STATUS_FAILED;
 		}
@@ -628,8 +627,8 @@ static void health_clear_faults(u8_t *data, u16_t len)
 {
 	SYS_LOG_DBG("");
 
-	memset(cur_faults, 0, sizeof(cur_faults));
-	memset(reg_faults, 0, sizeof(reg_faults));
+	(void)memset(cur_faults, 0, sizeof(cur_faults));
+	(void)memset(reg_faults, 0, sizeof(reg_faults));
 
 	bt_mesh_fault_update(&elements[0]);
 
@@ -653,7 +652,7 @@ static void model_send(u8_t *data, u16_t len)
 
 	/* Lookup source address */
 	for (i = 0; i < ARRAY_SIZE(model_bound); i++) {
-		if (model_bound[i].model->elem->addr == src) {
+		if (bt_mesh_model_elem(model_bound[i].model)->addr == src) {
 			model = model_bound[i].model;
 			ctx.app_idx = model_bound[i].appkey_idx;
 
@@ -734,6 +733,21 @@ static void rpl_clear(u8_t *data, u16_t len)
 }
 #endif /* CONFIG_BT_TESTING */
 
+static void proxy_identity_enable(u8_t *data, u16_t len)
+{
+	int err;
+
+	SYS_LOG_DBG("");
+
+	err = bt_mesh_proxy_identity_enable();
+	if (err) {
+		SYS_LOG_ERR("Failed to enable proxy identity (err %d)", err);
+	}
+
+	tester_rsp(BTP_SERVICE_ID_MESH, MESH_PROXY_IDENTITY, CONTROLLER_INDEX,
+		   err ? BTP_STATUS_FAILED : BTP_STATUS_SUCCESS);
+}
+
 void tester_handle_mesh(u8_t opcode, u8_t index, u8_t *data, u16_t len)
 {
 	switch (opcode) {
@@ -793,6 +807,9 @@ void tester_handle_mesh(u8_t opcode, u8_t index, u8_t *data, u16_t len)
 		rpl_clear(data, len);
 		break;
 #endif /* CONFIG_BT_TESTING */
+	case MESH_PROXY_IDENTITY:
+		proxy_identity_enable(data, len);
+		break;
 	default:
 		tester_rsp(BTP_SERVICE_ID_MESH, opcode, index,
 			   BTP_STATUS_UNKNOWN_CMD);

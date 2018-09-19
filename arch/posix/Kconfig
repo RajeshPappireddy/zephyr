@@ -6,13 +6,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-choice
-	prompt "POSIX Configuration Selection"
-	depends on ARCH_POSIX
-
-	source "arch/posix/soc/*/Kconfig.soc"
-endchoice
-
 menu "POSIX (native) Options"
 	depends on ARCH_POSIX
 
@@ -22,8 +15,6 @@ config ARCH
 config ARCH_DEFCONFIG
 	string
 	default "arch/posix/defconfig"
-
-source "arch/posix/core/Kconfig"
 
 config ARCH_POSIX_RECOMMENDED_STACK_SIZE
 	int
@@ -35,7 +26,5 @@ config ARCH_POSIX_RECOMMENDED_STACK_SIZE
 	  (In this architecture only part of the thread status is kept in the Zephyr
 	  thread stack, the real stack is the native underlying pthread stack.
 	  Therefore the allocated stack can be limited to this size)
-
-source "arch/posix/soc/*/Kconfig"
 
 endmenu

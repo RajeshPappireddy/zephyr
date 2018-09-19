@@ -12,6 +12,7 @@ properties:
       category: required
       description: compatible strings
       constraint: "atmel,sam0-pinmux"
+      generation: define
 
     reg:
       type: int
@@ -24,8 +25,6 @@ properties:
       category: required
       description: Human readable string describing the device (used by Zephyr for API name)
       generation: define
-
-cell_string: PINMUX
 
 "#cells":
   - pin

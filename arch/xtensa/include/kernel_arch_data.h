@@ -17,8 +17,8 @@
  * in the offsets.o module.
  */
 
-#ifndef _kernel_arch_data__h_
-#define _kernel_arch_data__h_
+#ifndef ZEPHYR_ARCH_XTENSA_INCLUDE_KERNEL_ARCH_DATA_H_
+#define ZEPHYR_ARCH_XTENSA_INCLUDE_KERNEL_ARCH_DATA_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +54,10 @@ typedef struct _kernel_arch _kernel_arch_t;
 
 #endif /*! _ASMLANGUAGE && ! __ASSEMBLER__ */
 
+#ifdef CONFIG_USE_SWITCH
+void xtensa_switch(void *switch_to, void **switched_from);
+#define _arch_switch xtensa_switch
+#endif
 
 /* stacks */
 #define STACK_ROUND_UP(x) ROUND_UP(x, STACK_ALIGN_SIZE)
@@ -63,5 +67,5 @@ typedef struct _kernel_arch _kernel_arch_t;
 }
 #endif
 
-#endif /* _kernel_arch_data__h_ */
+#endif /* ZEPHYR_ARCH_XTENSA_INCLUDE_KERNEL_ARCH_DATA_H_ */
 

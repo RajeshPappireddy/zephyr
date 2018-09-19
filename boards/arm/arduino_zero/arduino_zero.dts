@@ -18,13 +18,21 @@
 	};
 };
 
-&sercom5 {
-	status = "ok";
-	current-speed = <115200>;
-};
 &sercom0 {
 	status = "ok";
+	compatible = "atmel,sam0-uart";
 	current-speed = <115200>;
+};
+
+&sercom5 {
+	status = "ok";
+	compatible = "atmel,sam0-uart";
+	current-speed = <115200>;
+};
+
+&sercom4 {
+	status = "ok";
+	compatible = "atmel,sam0-spi";
 };
 
 &flash0 {
@@ -38,11 +46,15 @@
 		 * and is used by NFFS if enabled.
 		 */
 
-#if defined(CONFIG_FILE_SYSTEM_NFFS)
-		nffs_partition: partition@3c000 {
-			label = "nffs";
+#if defined(CONFIG_FS_FLASH_STORAGE_PARTITION)
+		storage_partition: partition@3c000 {
+			label = "storage";
 			reg = <0x0003c000 0x00004000>;
 		};
 #endif
 	};
+};
+
+&usb0 {
+	status = "ok";
 };

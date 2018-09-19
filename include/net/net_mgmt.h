@@ -9,8 +9,8 @@
  * @brief Network Management API public header
  */
 
-#ifndef __NET_MGMT_H__
-#define __NET_MGMT_H__
+#ifndef ZEPHYR_INCLUDE_NET_NET_MGMT_H_
+#define ZEPHYR_INCLUDE_NET_NET_MGMT_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -146,9 +146,10 @@ struct net_mgmt_event_callback {
 	 */
 	union {
 		/** A mask of network events on which the above handler should
-		 * be called in case those events come. Such mask can be
-		 * modified whenever necessary by the owner, and thus will
-		 * affect the handler being called or not.
+		 * be called in case those events come.
+		 * Note that only the command part is treated as a mask,
+		 * matching one to several commands. Layer and layer code will
+		 * be made of an exact match.
 		 */
 		u32_t event_mask;
 		/** Internal place holder when a synchronous event wait is
@@ -299,4 +300,4 @@ static inline int net_mgmt_event_wait_on_iface(struct net_if *iface,
 }
 #endif
 
-#endif /* __NET_MGMT_H__ */
+#endif /* ZEPHYR_INCLUDE_NET_NET_MGMT_H_ */

@@ -44,14 +44,21 @@
 
 #define CLIENT_BUF_SIZE 68
 
+#if defined(CONFIG_BT_MESH_DEBUG_USE_ID_ADDR)
+#define ADV_OPT (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME | \
+		 BT_LE_ADV_OPT_USE_IDENTITY)
+#else
+#define ADV_OPT (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME)
+#endif
+
 static const struct bt_le_adv_param slow_adv_param = {
-	.options = (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME),
+	.options = ADV_OPT,
 	.interval_min = BT_GAP_ADV_SLOW_INT_MIN,
 	.interval_max = BT_GAP_ADV_SLOW_INT_MAX,
 };
 
 static const struct bt_le_adv_param fast_adv_param = {
-	.options = (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME),
+	.options = ADV_OPT,
 	.interval_min = BT_GAP_ADV_FAST_INT_MIN_2,
 	.interval_max = BT_GAP_ADV_FAST_INT_MAX_2,
 };
@@ -134,11 +141,11 @@ static int filter_set(struct bt_mesh_proxy_client *client,
 
 	switch (type) {
 	case 0x00:
-		memset(client->filter, 0, sizeof(client->filter));
+		(void)memset(client->filter, 0, sizeof(client->filter));
 		client->filter_type = WHITELIST;
 		break;
 	case 0x01:
-		memset(client->filter, 0, sizeof(client->filter));
+		(void)memset(client->filter, 0, sizeof(client->filter));
 		client->filter_type = BLACKLIST;
 		break;
 	default:
@@ -537,7 +544,7 @@ static void proxy_connected(struct bt_conn *conn, u8_t err)
 
 	client->conn = bt_conn_ref(conn);
 	client->filter_type = NONE;
-	memset(client->filter, 0, sizeof(client->filter));
+	(void)memset(client->filter, 0, sizeof(client->filter));
 	net_buf_simple_reset(&client->buf);
 }
 
@@ -624,14 +631,13 @@ static struct bt_gatt_attr prov_attrs[] = {
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_MESH_PROV),
 
 	BT_GATT_CHARACTERISTIC(BT_UUID_MESH_PROV_DATA_IN,
-			       BT_GATT_CHRC_WRITE_WITHOUT_RESP),
-	BT_GATT_DESCRIPTOR(BT_UUID_MESH_PROV_DATA_IN, BT_GATT_PERM_WRITE,
-			   NULL, proxy_recv, (void *)1),
+			       BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+			       BT_GATT_PERM_WRITE, NULL, proxy_recv,
+			       (void *)1),
 
 	BT_GATT_CHARACTERISTIC(BT_UUID_MESH_PROV_DATA_OUT,
-			       BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(BT_UUID_MESH_PROV_DATA_OUT, BT_GATT_PERM_NONE,
-			   NULL, NULL, NULL),
+			       BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_NONE,
+			       NULL, NULL, NULL),
 	/* Add custom CCC as clients need to be tracked individually */
 	BT_GATT_DESCRIPTOR(BT_UUID_GATT_CCC,
 			   BT_GATT_PERM_WRITE | BT_GATT_PERM_READ,
@@ -731,14 +737,14 @@ static struct bt_gatt_attr proxy_attrs[] = {
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_MESH_PROXY),
 
 	BT_GATT_CHARACTERISTIC(BT_UUID_MESH_PROXY_DATA_IN,
-			       BT_GATT_CHRC_WRITE_WITHOUT_RESP),
-	BT_GATT_DESCRIPTOR(BT_UUID_MESH_PROXY_DATA_IN, BT_GATT_PERM_WRITE,
-			   NULL, proxy_recv, NULL),
+			       BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+			       BT_GATT_PERM_WRITE,
+			       NULL, proxy_recv, NULL),
 
 	BT_GATT_CHARACTERISTIC(BT_UUID_MESH_PROXY_DATA_OUT,
-			       BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(BT_UUID_MESH_PROXY_DATA_OUT, BT_GATT_PERM_NONE,
-			   NULL, NULL, NULL),
+			       BT_GATT_CHRC_NOTIFY,
+			       BT_GATT_PERM_NONE,
+			       NULL, NULL, NULL),
 	/* Add custom CCC as clients need to be tracked individually */
 	BT_GATT_DESCRIPTOR(BT_UUID_GATT_CCC,
 			   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
@@ -879,13 +885,13 @@ static int proxy_send(struct bt_conn *conn, const void *data, u16_t len)
 
 #if defined(CONFIG_BT_MESH_GATT_PROXY)
 	if (gatt_svc == MESH_GATT_PROXY) {
-		return bt_gatt_notify(conn, &proxy_attrs[4], data, len);
+		return bt_gatt_notify(conn, &proxy_attrs[3], data, len);
 	}
 #endif
 
 #if defined(CONFIG_BT_MESH_PB_GATT)
 	if (gatt_svc == MESH_GATT_PROV) {
-		return bt_gatt_notify(conn, &prov_attrs[4], data, len);
+		return bt_gatt_notify(conn, &prov_attrs[3], data, len);
 	}
 #endif
 
@@ -952,9 +958,6 @@ static const struct bt_data prov_ad[] = {
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x27, 0x18),
 	BT_DATA(BT_DATA_SVC_DATA16, prov_svc_data, sizeof(prov_svc_data)),
 };
-
-static struct bt_data prov_sd[2];
-static size_t prov_sd_len;
 #endif /* PB_GATT */
 
 #if defined(CONFIG_BT_MESH_GATT_PROXY)
@@ -995,7 +998,7 @@ static int node_id_adv(struct bt_mesh_subnet *sub)
 		return err;
 	}
 
-	memset(tmp, 0, 6);
+	(void)memset(tmp, 0, 6);
 	memcpy(tmp + 6, proxy_svc_data + 11, 8);
 	sys_put_be16(bt_mesh_primary_addr(), tmp + 14);
 
@@ -1148,6 +1151,52 @@ static s32_t gatt_proxy_advertise(struct bt_mesh_subnet *sub)
 }
 #endif /* GATT_PROXY */
 
+#if defined(CONFIG_BT_MESH_PB_GATT)
+static size_t gatt_prov_adv_create(struct bt_data prov_sd[2])
+{
+	const struct bt_mesh_prov *prov = bt_mesh_prov_get();
+	const char *name = bt_get_name();
+	size_t name_len = strlen(name);
+	size_t prov_sd_len = 0;
+	size_t sd_space = 31;
+
+	memcpy(prov_svc_data + 2, prov->uuid, 16);
+	sys_put_be16(prov->oob_info, prov_svc_data + 18);
+
+	if (prov->uri) {
+		size_t uri_len = strlen(prov->uri);
+
+		if (uri_len > 29) {
+			/* There's no way to shorten an URI */
+			BT_WARN("Too long URI to fit advertising packet");
+		} else {
+			prov_sd[0].type = BT_DATA_URI;
+			prov_sd[0].data_len = uri_len;
+			prov_sd[0].data = prov->uri;
+			sd_space -= 2 + uri_len;
+			prov_sd_len++;
+		}
+	}
+
+	if (sd_space > 2 && name_len > 0) {
+		sd_space -= 2;
+
+		if (sd_space < name_len) {
+			prov_sd[prov_sd_len].type = BT_DATA_NAME_SHORTENED;
+			prov_sd[prov_sd_len].data_len = sd_space;
+		} else {
+			prov_sd[prov_sd_len].type = BT_DATA_NAME_COMPLETE;
+			prov_sd[prov_sd_len].data_len = name_len;
+		}
+
+		prov_sd[prov_sd_len].data = name;
+		prov_sd_len++;
+	}
+
+	return prov_sd_len;
+}
+#endif /* CONFIG_BT_MESH_PB_GATT */
+
 s32_t bt_mesh_proxy_adv_start(void)
 {
 	BT_DBG("");
@@ -1159,12 +1208,16 @@ s32_t bt_mesh_proxy_adv_start(void)
 #if defined(CONFIG_BT_MESH_PB_GATT)
 	if (!bt_mesh_is_provisioned()) {
 		const struct bt_le_adv_param *param;
+		struct bt_data prov_sd[2];
+		size_t prov_sd_len;
 
 		if (prov_fast_adv) {
 			param = &fast_adv_param;
 		} else {
 			param = &slow_adv_param;
 		}
+
+		prov_sd_len = gatt_prov_adv_create(prov_sd);
 
 		if (bt_le_adv_start(param, prov_ad, ARRAY_SIZE(prov_ad),
 				    prov_sd, prov_sd_len) == 0) {
@@ -1214,44 +1267,6 @@ static struct bt_conn_cb conn_callbacks = {
 int bt_mesh_proxy_init(void)
 {
 	int i;
-#if defined(CONFIG_BT_MESH_PB_GATT)
-	const struct bt_mesh_prov *prov = bt_mesh_prov_get();
-	size_t name_len = strlen(CONFIG_BT_DEVICE_NAME);
-	size_t sd_space = 31;
-
-	memcpy(prov_svc_data + 2, prov->uuid, 16);
-	sys_put_be16(prov->oob_info, prov_svc_data + 18);
-
-	if (prov->uri) {
-		size_t uri_len = strlen(prov->uri);
-
-		if (uri_len > 29) {
-			/* There's no way to shorten an URI */
-			BT_WARN("Too long URI to fit advertising packet");
-		} else {
-			prov_sd[0].type = BT_DATA_URI;
-			prov_sd[0].data_len = uri_len;
-			prov_sd[0].data = prov->uri;
-			sd_space -= 2 + uri_len;
-			prov_sd_len++;
-		}
-	}
-
-	if (sd_space > 2 && name_len > 0) {
-		sd_space -= 2;
-
-		if (sd_space < name_len) {
-			prov_sd[prov_sd_len].type = BT_DATA_NAME_SHORTENED;
-			prov_sd[prov_sd_len].data_len = sd_space;
-		} else {
-			prov_sd[prov_sd_len].type = BT_DATA_NAME_COMPLETE;
-			prov_sd[prov_sd_len].data_len = name_len;
-		}
-
-		prov_sd[prov_sd_len].data = CONFIG_BT_DEVICE_NAME;
-		prov_sd_len++;
-	}
-#endif /* CONFIG_BT_MESH_PB_GATT */
 
 	/* Initialize the client receive buffers */
 	for (i = 0; i < ARRAY_SIZE(clients); i++) {

@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _POSIX_INTERNAL_H
-#define _POSIX_INTERNAL_H
+#ifndef ZEPHYR_ARCH_POSIX_INCLUDE_POSIX_ARCH_INTERNAL_H_
+#define ZEPHYR_ARCH_POSIX_INCLUDE_POSIX_ARCH_INTERNAL_H_
+
+#include "toolchain.h"
 
 #define _SAFE_CALL(a) _safe_call(a, #a)
 
@@ -16,7 +18,7 @@ extern "C" {
 static inline void _safe_call(int test, const char *test_str)
 {
 	/* LCOV_EXCL_START */ /* See Note1 */
-	if (test) {
+	if (unlikely(test)) {
 		posix_print_error_and_exit("POSIX arch: Error on: %s\n",
 					   test_str);
 	}
@@ -27,7 +29,7 @@ static inline void _safe_call(int test, const char *test_str)
 }
 #endif
 
-#endif /* _POSIX_INTERNAL_H */
+#endif /* ZEPHYR_ARCH_POSIX_INCLUDE_POSIX_ARCH_INTERNAL_H_ */
 
 /*
  * Note 1:

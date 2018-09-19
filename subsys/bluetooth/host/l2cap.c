@@ -42,8 +42,10 @@
 #define L2CAP_LE_CID_IS_DYN(_cid) \
 	(_cid >= L2CAP_LE_CID_DYN_START && _cid <= L2CAP_LE_CID_DYN_END)
 
-#define L2CAP_LE_PSM_START	0x0001
-#define L2CAP_LE_PSM_END	0x00ff
+#define L2CAP_LE_PSM_FIXED_START 0x0001
+#define L2CAP_LE_PSM_FIXED_END   0x007f
+#define L2CAP_LE_PSM_DYN_START   0x0080
+#define L2CAP_LE_PSM_DYN_END     0x00ff
 
 #define L2CAP_CONN_TIMEOUT	K_SECONDS(40)
 #define L2CAP_DISC_TIMEOUT	K_SECONDS(2)
@@ -589,9 +591,38 @@ static struct bt_l2cap_server *l2cap_server_lookup_psm(u16_t psm)
 
 int bt_l2cap_server_register(struct bt_l2cap_server *server)
 {
-	if (server->psm < L2CAP_LE_PSM_START ||
-	    server->psm > L2CAP_LE_PSM_END || !server->accept) {
+	if (!server->accept) {
 		return -EINVAL;
+	}
+
+	if (server->psm) {
+		if (server->psm < L2CAP_LE_PSM_FIXED_START ||
+		    server->psm > L2CAP_LE_PSM_DYN_END) {
+			return -EINVAL;
+		}
+
+		/* Check if given PSM is already in use */
+		if (l2cap_server_lookup_psm(server->psm)) {
+			BT_DBG("PSM already registered");
+			return -EADDRINUSE;
+		}
+	} else {
+		u16_t psm;
+
+		for (psm = L2CAP_LE_PSM_DYN_START;
+		     psm <= L2CAP_LE_PSM_DYN_END; psm++) {
+			if (!l2cap_server_lookup_psm(psm)) {
+				break;
+			}
+		}
+
+		if (psm > L2CAP_LE_PSM_DYN_END) {
+			BT_WARN("No free dynamic PSMs available");
+			return -EADDRNOTAVAIL;
+		}
+
+		BT_DBG("Allocated PSM 0x%04x for new server", psm);
+		server->psm = psm;
 	}
 
 	if (server->sec_level > BT_SECURITY_FIPS) {
@@ -599,12 +630,6 @@ int bt_l2cap_server_register(struct bt_l2cap_server *server)
 	} else if (server->sec_level < BT_SECURITY_LOW) {
 		/* Level 0 is only applicable for BR/EDR */
 		server->sec_level = BT_SECURITY_LOW;
-	}
-
-	/* Check if given PSM is already in use */
-	if (l2cap_server_lookup_psm(server->psm)) {
-		BT_DBG("PSM already registered");
-		return -EADDRINUSE;
 	}
 
 	BT_DBG("PSM 0x%04x", server->psm);
@@ -646,7 +671,7 @@ static void l2cap_chan_tx_init(struct bt_l2cap_le_chan *chan)
 {
 	BT_DBG("chan %p", chan);
 
-	memset(&chan->tx, 0, sizeof(chan->tx));
+	(void)memset(&chan->tx, 0, sizeof(chan->tx));
 	k_sem_init(&chan->tx.credits, 0, UINT_MAX);
 	k_fifo_init(&chan->tx_queue);
 }
@@ -727,7 +752,7 @@ static void le_conn_req(struct bt_l2cap *l2cap, u8_t ident,
 				      sizeof(*rsp));
 
 	rsp = net_buf_add(buf, sizeof(*rsp));
-	memset(rsp, 0, sizeof(*rsp));
+	(void)memset(rsp, 0, sizeof(*rsp));
 
 	/* Check if there is a server registered */
 	server = l2cap_server_lookup_psm(psm);
@@ -1568,7 +1593,7 @@ void bt_l2cap_init(void)
 static int l2cap_le_connect(struct bt_conn *conn, struct bt_l2cap_le_chan *ch,
 			    u16_t psm)
 {
-	if (psm < L2CAP_LE_PSM_START || psm > L2CAP_LE_PSM_END) {
+	if (psm < L2CAP_LE_PSM_FIXED_START || psm > L2CAP_LE_PSM_DYN_END) {
 		return -EINVAL;
 	}
 

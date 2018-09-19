@@ -5,9 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _CTRL_H_
-#define _CTRL_H_
-
 /*****************************************************************************
  * Zephyr Kconfig defined
  ****************************************************************************/
@@ -332,7 +329,8 @@ struct radio_pdu_node_rx {
  * Controller Interface Functions
  ****************************************************************************/
 /* Downstream */
-u32_t radio_init(void *hf_clock, u8_t sca, u8_t connection_count_max,
+u32_t radio_init(void *hf_clock, u8_t sca, void *entropy,
+		 u8_t connection_count_max,
 		 u8_t rx_count_max, u8_t tx_count_max,
 		 u16_t packet_data_octets_max,
 		 u16_t packet_tx_data_size, u8_t *mem_radio,
@@ -373,5 +371,3 @@ u8_t radio_rx_fc_get(u16_t *handle);
 extern void radio_active_callback(u8_t active);
 extern void radio_event_callback(void);
 extern void ll_adv_scan_state_cb(u8_t bm);
-
-#endif

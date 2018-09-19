@@ -9,27 +9,22 @@
  * @brief Console handler implementation of shell.h API
  */
 
-
 #include <zephyr.h>
 #include <stdio.h>
 #include <string.h>
 #include <version.h>
 
-#include <console/console.h>
+#include <console.h>
+#include <drivers/console/console.h>
 #include <misc/printk.h>
 #include <misc/util.h>
-
-#ifdef CONFIG_UART_CONSOLE
-#include <console/uart_console.h>
-#endif
-#ifdef CONFIG_TELNET_CONSOLE
-#include <console/telnet_console.h>
-#endif
-#ifdef CONFIG_NATIVE_POSIX_CONSOLE
-#include <console/native_posix_console.h>
-#endif
+#include "mgmt/serial.h"
 
 #include <shell/shell.h>
+
+#if defined(CONFIG_NATIVE_POSIX_CONSOLE)
+#include "drivers/console/native_posix_console.h"
+#endif
 
 #define ARGC_MAX 10
 #define COMMAND_MAX_LEN 50
@@ -65,6 +60,9 @@ static struct k_fifo cmds_queue;
 
 static shell_cmd_function_t app_cmd_handler;
 static shell_prompt_function_t app_prompt_handler;
+
+static shell_mcumgr_function_t mcumgr_cmd_handler;
+static void *mcumgr_arg;
 
 static const char *get_prompt(void)
 {
@@ -361,13 +359,23 @@ static const struct shell_cmd *get_internal(const char *command)
 	return get_cmd(internal_commands, command);
 }
 
+void shell_register_mcumgr_handler(shell_mcumgr_function_t handler, void *arg)
+{
+	mcumgr_cmd_handler = handler;
+	mcumgr_arg = arg;
+}
+
 int shell_exec(char *line)
 {
 	char *argv[ARGC_MAX + 1], **argv_start = argv;
 	const struct shell_cmd *cmd;
 	int argc, err;
 
-	argc = line2argv(line, argv, ARRAY_SIZE(argv));
+	if (default_module && default_module->line2argv) {
+		argc = default_module->line2argv(line, argv, ARRAY_SIZE(argv));
+	} else {
+		argc = line2argv(line, argv, ARRAY_SIZE(argv));
+	}
 	if (!argc) {
 		return -EINVAL;
 	}
@@ -425,6 +433,8 @@ done:
 
 static void shell(void *p1, void *p2, void *p3)
 {
+	bool skip_prompt = false;
+
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
@@ -434,7 +444,7 @@ static void shell(void *p1, void *p2, void *p3)
 	while (1) {
 		struct console_input *cmd;
 
-		if (!no_promt) {
+		if (!no_promt && !skip_prompt) {
 			printk("%s", get_prompt());
 #if defined(CONFIG_NATIVE_POSIX_CONSOLE)
 			/* The native printk driver is line buffered */
@@ -444,7 +454,17 @@ static void shell(void *p1, void *p2, void *p3)
 
 		cmd = k_fifo_get(&cmds_queue, K_FOREVER);
 
-		shell_exec(cmd->line);
+		/* If the received line is an mcumgr frame, divert it to the
+		 * mcumgr handler.  Don't print the shell prompt this time, as
+		 * that will interfere with the mcumgr response.
+		 */
+		if (mcumgr_cmd_handler != NULL && cmd->is_mcumgr) {
+			mcumgr_cmd_handler(cmd->line, mcumgr_arg);
+			skip_prompt = true;
+		} else {
+			shell_exec(cmd->line);
+			skip_prompt = false;
+		}
 
 		k_fifo_put(&avail_queue, cmd);
 	}
@@ -482,7 +502,7 @@ static struct shell_module *get_completion_module(char *str,
 	 */
 	str = strchr(str, ' ');
 	if (default_module) {
-		return str ? dest : NULL;
+		return str ? NULL : dest;
 	}
 
 	if (!str) {
@@ -507,7 +527,7 @@ static struct shell_module *get_completion_module(char *str,
 	str = strchr(str, ' ');
 
 	/* only two parameters are possibles in case of no default module */
-	return str ? dest : NULL;
+	return str ? NULL : dest;
 }
 
 static u8_t completion(char *line, u8_t len)
@@ -607,16 +627,8 @@ void shell_init(const char *str)
 	k_thread_create(&shell_thread, stack, STACKSIZE, shell, NULL, NULL,
 			NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
 
-	/* Register serial console handler */
-#ifdef CONFIG_UART_CONSOLE
-	uart_register_input(&avail_queue, &cmds_queue, completion);
-#endif
-#ifdef CONFIG_TELNET_CONSOLE
-	telnet_register_input(&avail_queue, &cmds_queue, completion);
-#endif
-#ifdef CONFIG_NATIVE_POSIX_STDIN_CONSOLE
-	native_stdin_register_input(&avail_queue, &cmds_queue, completion);
-#endif
+	/* Register console handler */
+	console_register_line_input(&avail_queue, &cmds_queue, completion);
 }
 
 /** @brief Optionally register an app default cmd handler.

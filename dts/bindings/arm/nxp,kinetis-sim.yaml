@@ -17,6 +17,7 @@ properties:
       category: required
       description: compatible strings
       constraint: "nxp,kinetis-sim"
+      generation: define
 
     reg:
       type: int
@@ -29,8 +30,6 @@ properties:
       category: required
       description: Human readable string describing the device (used by Zephyr for API name)
       generation: define
-
-cell_string: SIM_CLK
 
 "#cells":
   - name
